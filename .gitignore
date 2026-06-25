@@ -10,14 +10,18 @@ config.py
 snowflake_config.toml
 server_settings.json
 
-# Node
+# Node / build artifacts
 frontend/node_modules/
+frontend/dist/
 
-# Runtime outputs
+# Runtime data — bring your own; NEVER commit confidential client material
+# (contract PDFs, dictionaries, client-name lists) or generated outputs.
 backend/Output/
-backend/Input/DNA
-backend/Input/PORTICO
+backend/Input/
 backend/Feedbacks/
+
+# Contract PDFs anywhere — belt-and-suspenders even outside backend/Input
+*.pdf
 
 # OS
 .DS_Store

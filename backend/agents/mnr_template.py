@@ -1314,16 +1314,26 @@ def run(
 
     pairs = [latest]   # exactly one PDF — keeps the rest of the loop intact
 
-    # Locate the Frequently Used catalog (PRIMARY dictionary).
+    # Locate the Frequently Used catalog (PRIMARY dictionary). This is the
+    # PREFERRED source, but the agent is designed to fall back to the Portico
+    # master dictionary for anything the primary doesn't cover (see Stage 2 /
+    # _build_mnr_rows). So a missing catalog must NOT silently abort the whole
+    # agent — we degrade to master-dictionary-only matching and still produce a
+    # draft. (Previously this returned "no_catalog" with no output, which read
+    # as "the MNR agent doesn't run" to the user.)
     freq_path = _find_freq_catalog(core)
     if freq_path is None:
-        log(f"  ⚠ Could not find '{MNR_FREQ_CATALOG_NAME}' in Input/{core}/ "
-            f"or {BASE_DIR}. The matcher needs this primary dictionary.")
-        return {"status": "no_catalog", "client": client_name, "rows": 0,
-                "output": ""}
-    log(f"  Primary dictionary: {freq_path.name}")
-    _ensure_cpi_column(freq_path, log)
-    freq_df = pd.read_excel(str(freq_path)).fillna("").astype(str)
+        log(f"  ⚠ '{MNR_FREQ_CATALOG_NAME}' not found in Input/{core}/ or "
+            f"{BASE_DIR}. Proceeding with the master dictionary as the sole "
+            "matching source — add the catalog for higher-confidence primary "
+            "matches.")
+        freq_df = pd.DataFrame(columns=[
+            "Material Code", "Description", "Item Category",
+            "Condition Type", "CPI Eligible"])
+    else:
+        log(f"  Primary dictionary: {freq_path.name}")
+        _ensure_cpi_column(freq_path, log)
+        freq_df = pd.read_excel(str(freq_path)).fillna("").astype(str)
 
     # Locate the Portico master (FALLBACK dictionary). Uses the existing
     # Core dictionary resolution, or accepts an explicit override.

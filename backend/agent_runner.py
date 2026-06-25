@@ -528,11 +528,28 @@ def pipeline_events(client: str, core: str, force: bool = False):
            "agentsDone": done_count, "total": total, "elapsedMs": elapsed_ms}
 
 
+# Human-readable reasons for the "ran but produced nothing" statuses, so the UI
+# explains WHY an agent made no output instead of showing a bare "0 rows".
+_SKIP_REASONS: dict[str, str] = {
+    "no_pdfs":            "no input PDFs for this client",
+    "no_master_agreement":"no master agreement found — run Hierarchy / Engagement Overview first",
+    "no_master":          "no Core dictionary found",
+    "no_catalog":         "'Frequently Used Material Codes.xlsx' not found",
+    "no_matching":        "Material Code Matching must run first",
+    "no_history":         "no SAP invoice history matched this client",
+    "no_items":           "nothing to process",
+    "no_snowflake":       "SAP invoice data (Snowflake) unavailable",
+}
+
+
 def _summarize_result(key: str, result: Optional[dict]) -> str:
     if not result:
         return ""
-    if result.get("status") == "error":
+    status = result.get("status")
+    if status == "error":
         return result.get("error", "error")
+    if status in _SKIP_REASONS:
+        return f"skipped — {_SKIP_REASONS[status]}"
     n = result.get("rows")
     if n is not None:
         return f"{n} rows"

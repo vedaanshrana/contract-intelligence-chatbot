@@ -142,6 +142,7 @@ FRONTEND_AGENTS = (
     ("material_validation","Material Validation Agent"),
     ("cpi_terms",          "CPI Terms Agent"),
     ("termination_clause", "Termination Clause Agent"),
+    ("mnr_template",       "MNR Template Agent"),
 )
 
 
@@ -153,7 +154,7 @@ def frontend_agent_done(key: str, client: str) -> bool:
     fully independent agents with their own output files."""
     from agents import (hierarchy, engagement_overview, product_module,
                         extraction, material_match, cpi, termination,
-                        material_validation)
+                        material_validation, mnr_template)
     checks = {
         "contract_hierarchy": hierarchy.is_processed,
         "contract_scope":     engagement_overview.is_processed,
@@ -163,6 +164,7 @@ def frontend_agent_done(key: str, client: str) -> bool:
         "material_validation": material_validation.is_processed,
         "cpi_terms":          cpi.is_processed,
         "termination_clause": termination.is_processed,
+        "mnr_template":       mnr_template.is_processed,
     }
     fn = checks.get(key)
     try:
@@ -180,7 +182,7 @@ def agent_status(agent: str, client: str) -> str:
     from agents import (hierarchy, engagement_overview, product_module,
                         scope_agent, extraction, material_match, cpi,
                         term_renewal, termination, sla, volume_tiers,
-                        material_validation)
+                        material_validation, mnr_template)
     modules = {
         "hierarchy":           hierarchy,
         "engagement_overview": engagement_overview,
@@ -194,6 +196,7 @@ def agent_status(agent: str, client: str) -> str:
         "termination":         termination,
         "sla":                 sla,
         "volume_tiers":        volume_tiers,
+        "mnr_template":        mnr_template,
         # Legacy alias — keep working for any caller still passing the old key.
         "master_contract":     engagement_overview,
     }
@@ -712,6 +715,87 @@ def _run_material_validation(client: str) -> None:
                                  status="complete" if _ok else "error")
 
 
+def _run_mnr(client: str) -> None:
+    """MNR Template Agent — forensic fee extraction on the latest master
+    agreement, material-code matching, and a SAP-ready MNR Excel draft
+    (mnr_output.xlsx) with biller colour-coding.
+
+    Needs a master agreement (Hierarchy / Engagement Overview help find it, but
+    a filename heuristic also works) and a Core dictionary. The
+    'Frequently Used Material Codes.xlsx' catalog is preferred but optional —
+    without it the agent matches against the Core master dictionary alone."""
+    import importlib
+    import agents.mnr_template as _mnr_module
+    try:
+        _mnr_module = importlib.reload(_mnr_module)
+    except Exception:
+        pass
+    try:
+        from config import MNR_API_KEY as _MNR_KEY, MNR_MODEL as _MNR_MODEL
+    except Exception:
+        _MNR_KEY, _MNR_MODEL = EXTRACTION_API_KEY, "gpt-5.2-2025-12-11"
+
+    pb = st.empty()
+
+    def _cb(msg: str) -> None:
+        pb.info("⏳ " + msg)
+
+    _mark = run_metrics.snapshot(); _t0 = time.perf_counter(); _ok = False
+    with st.status(f"⏳ MNR Template: {client}…", expanded=True) as status:
+        try:
+            result = _mnr_module.run(
+                client,
+                api_key=_MNR_KEY,
+                model=_MNR_MODEL,
+                progress_callback=_cb,
+                core=st.session_state.selected_core,
+                dictionary_path=_resolve_dict_path(),
+            )
+            pb.empty()
+            status_str = result.get("status", "")
+            if status_str == "no_pdfs":
+                status.update(label="⚠ MNR: no input PDFs for this client",
+                              state="error")
+                return
+            if status_str == "no_master_agreement":
+                status.update(label="⚠ MNR: no master agreement found",
+                              state="error")
+                st.info("The MNR agent runs on the client's latest MASTER "
+                        "AGREEMENT. None was found — run the **Hierarchy** "
+                        "and/or **Engagement Overview** agents first so "
+                        "documents are classified, then re-run MNR.")
+                return
+            if status_str == "no_master":
+                status.update(label="⚠ MNR: no Core dictionary found",
+                              state="error")
+                st.info("MNR needs a Core dictionary (set one in the sidebar) "
+                        "to match material codes.")
+                return
+            if status_str != "complete":
+                status.update(label=f"⚠ MNR: {status_str}", state="error")
+                return
+            rows = result.get("rows", 0)
+            if not rows:
+                status.update(label="⚠ MNR ran but produced 0 rows (no fee "
+                                    "items extracted from the master agreement)",
+                              state="error")
+                return
+            status.update(
+                label=f"✅ MNR complete — {rows} row(s) "
+                      f"(extracted {result.get('stage1_items', 0)}, matched "
+                      f"{result.get('stage2_matched', 0)})",
+                state="complete")
+            _ok = True
+        except Exception as e:
+            pb.empty()
+            status.update(label=f"❌ MNR failed: {e}", state="error")
+        finally:
+            run_metrics.finalize(client, "mnr_template",
+                                 "MNR Template Agent", _t0, _mark,
+                                 fallback_model=_MNR_MODEL,
+                                 status="complete" if _ok else "error")
+
+
 def _run_clause(agent_name: str, client: str) -> None:
     """Generic runner for the four ClauseExtractor-based agents."""
     from agents import term_renewal, termination, sla, volume_tiers
@@ -963,6 +1047,12 @@ with st.sidebar:
                  _make_clause_runner("termination"),
                  "Termination clauses: for cause / for convenience, notice "
                  "periods, early-termination fees, survival."),
+                ("mnr_template", "MNR Template Agent", _run_mnr,
+                 "Forensic fee extraction on the latest master agreement + "
+                 "material-code matching, producing a SAP-ready MNR Excel "
+                 "draft (mnr_output.xlsx) with biller colour-coding. Needs a "
+                 "master agreement and a Core dictionary; the 'Frequently Used "
+                 "Material Codes.xlsx' catalog is optional."),
             ]
 
             def _render_agent_buttons(btns: list, client: str) -> None:
@@ -1019,6 +1109,11 @@ if load_btn and unprocessed:
         for a in ("term_renewal", "termination", "sla", "volume_tiers"):
             if agent_status(a, c) != "done":
                 _run_clause(a, c)
+        # MNR Template — SAP-ready draft from the latest master agreement.
+        # Self-skips (writes no file) when no master agreement / dictionary is
+        # available, so it's safe to call unconditionally during Load.
+        if agent_status("mnr_template", c) != "done":
+            _run_mnr(c)
     st.session_state.ctx         = {}
     st.session_state.ctx_clients = []
     st.rerun()
