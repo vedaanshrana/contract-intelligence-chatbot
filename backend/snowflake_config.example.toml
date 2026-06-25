@@ -1,0 +1,54 @@
+# ============================================================================
+# Snowflake invoice connection — EXAMPLE
+# ============================================================================
+# Copy this file to  snowflake_config.toml  (same folder, no ".example") and
+# fill in the real values. snowflake_config.toml is git-ignored and never
+# shipped in the patch notebook, so your credentials stay on the VDI only.
+#
+# Resolution order the chatbot uses to find this file (first hit wins):
+#   1. $SNOWFLAKE_CONFIG_TOML                       (explicit path override)
+#   2. <project>/snowflake_config.toml              ← recommended
+#   3. <project>/.snowflake/connections.toml
+#   4. ~/.snowflake/connections.toml                (Snowflake's default)
+#
+# The section name ([gbsprodrudy] below) can be anything. If you have more
+# than one section, set $SNOWFLAKE_CONNECTION_NAME to choose; otherwise the
+# FIRST section in the file is used.
+# ============================================================================
+
+[gbsprodrudy]
+account   = "fiservgbsprod.us-west-2.privatelink"
+user      = "rudraksh.gupta@fiserv.com"
+
+# --- Credential ----------------------------------------------------------
+# The chatbot uses `token` first (if present), else `password`.
+#
+#   • If your credential is a Programmatic Access Token (PAT) — the long
+#     "eyJ..." JWT in the screenshot — the simplest, working setup is to put
+#     it in `password` and leave `authenticator` unset (PATs are accepted in
+#     the password field).
+#
+#   • If it is an OAuth access token instead, comment out `password`, put the
+#     token in `token`, and set:  authenticator = "oauth"
+#
+# Only ONE of password / token is needed.
+password  = "PASTE_YOUR_PAT_OR_PASSWORD_HERE"
+# token       = "PASTE_OAUTH_TOKEN_HERE"
+# authenticator = "oauth"
+
+warehouse = "GBS_BILLING_WH"
+database  = "GBS_BILLING_DB"
+schema    = "ADHOC"
+table     = "SAP_OTC_SD_INVOICE_CONSOLIDATED_VIEW"
+
+# Optional — only if your account requires an explicit role.
+# role    = "GBS_BILLING_READER"
+
+# ============================================================================
+# Optional tuning (these are environment variables, NOT toml keys — set them
+# in .env or the shell if the defaults don't fit):
+#   SNOWFLAKE_MAX_INVOICE_LINES   max invoice lines pulled per engagement (400)
+#   SNOWFLAKE_BILLTO_THRESHOLD    fuzzy client↔bill-to match cutoff 0-100 (86)
+#   SNOWFLAKE_CONNECTION_NAME     which [section] to use (default: first)
+#   SNOWFLAKE_CONFIG_TOML         absolute path to this file
+# ============================================================================

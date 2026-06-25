@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Contract Intelligence Chatbot — Python dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+# Install with:  pip install -r requirements.txt
+#
+# Tested on Python 3.10 – 3.14.  Standard-library modules (json, os, pathlib,
+# concurrent.futures, threading, re, base64, math, datetime, importlib,
+# tomllib on 3.11+, …) are not listed — they ship with Python itself.
+#
+# Every dependency below is a HARD requirement: at least one agent or one
+# code path imports it at module load.  The previous version of this file
+# marked `sentence-transformers` as optional, but the verbatim-port
+# Fee-Description / Material-Matching pipeline now imports it at the top of
+# `agents/extraction.py` (matching the colleague's reference notebook),
+# so importing the agent without it raises ImportError immediately.
+
+# ── LLM client + transport ──────────────────────────────────────────────────
+openai>=1.0.0                # OpenAI Python SDK (responses + chat.completions)
+httpx>=0.27.0                # FoundationClient HTTP layer when OPENAI_BACKEND=fiserv
+tenacity>=8.0.0              # exponential-backoff retry — used by Hierarchy agent
+
+# ── Configuration / env loading ─────────────────────────────────────────────
+python-dotenv>=1.0.0         # loads `.env` at start-up (config.py)
+tomli>=2.0.1 ; python_version < "3.11"
+                             # only needed on 3.10 — 3.11+ ships tomllib
+
+# ── Data wrangling + Excel I/O ──────────────────────────────────────────────
+pandas>=2.0.0                # DataFrame + read_excel/to_excel
+numpy>=1.24.0                # required by pandas + the fuzzy-matching cosine
+openpyxl>=3.1.0              # pandas backend for reading .xlsx
+xlsxwriter>=3.0.0            # pandas backend for writing Dollar_Items sheet
+
+# ── PDF + imaging (Phase 1 extraction) ──────────────────────────────────────
+pymupdf>=1.23.0              # `import fitz` — PDF → images at DPI 600
+Pillow>=10.0.0               # PIL.Image — base64 PNG encoding of page renders
+
+# ── Streamlit UI + PDF viewer + hierarchy graph ─────────────────────────────
+streamlit>=1.35.0            # chatbot frontend
+streamlit-pdf-viewer>=0.0.14 # in-app PDF / invoice viewer (chatbot.py)
+plotly>=5.0.0                # interactive hierarchy graph visualisation
+
+# ── Semantic + fuzzy matching (Phase 2) ─────────────────────────────────────
+sentence-transformers>=2.2.0 # `all-mpnet-base-v2` semantic similarity
+scikit-learn>=1.3.0          # TF-IDF char-n-gram + normalize  (Phase 2 fuzzy)
+rapidfuzz>=3.0.0             # client ↔ bill-to fuzzy match (Snowflake invoice)
+
+# ── Schema validation (Engagement Overview + Product Module Phase 1.5) ──────
+pydantic>=2.0.0              # response_format / structured outputs
+
+# ── Snowflake (live SAP invoice context — optional) ─────────────────────────
+# Required only when the chatbot needs to consult live invoice data via the
+# Snowflake invoice agent.  Without it, the agent surfaces a clean notice
+# saying the connector isn't installed; the rest of the chatbot keeps working.
+snowflake-connector-python>=3.0.0
+
+# ── Optional: OCR for image-only PDFs in the CPI extractor ──────────────────
+# The CPI agent's text path runs without this; uncomment ONLY if you have
+# scanned-image PDFs without an embedded text layer AND the Tesseract-OCR
+# binary installed (Windows default: C:\Program Files\Tesseract-OCR\tesseract.exe).
+# pytesseract>=0.3.10

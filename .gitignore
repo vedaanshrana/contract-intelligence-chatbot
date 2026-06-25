@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
+config.py
+
+# Secrets
+snowflake_config.toml
+server_settings.json
+
+# Node
+frontend/node_modules/
+
+# Runtime outputs
+backend/Output/
+backend/Input/DNA
+backend/Input/PORTICO
+backend/Feedbacks/
+
+# OS
+.DS_Store
+Thumbs.db
